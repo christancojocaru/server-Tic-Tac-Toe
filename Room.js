@@ -8,7 +8,7 @@ class Room {
   }
 
   getUser(name) {
-    return "SELECT `user`.`id` FROM `user` WHERE name = '" + name + "'";
+    return "SELECT `user`.`id` FROM `user` WHERE name = '" + name + "' LIMIT 1";
   }
 
   addToDatabase() {
