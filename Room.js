@@ -15,11 +15,11 @@ class Room {
     let con = new DatabaseConnection().con();
     con.connect((error) => {
       if (error) throw err;
-      let sql = "INSERT INTO `game` (`room_id`, `user_1_id`, `user_2_id`) VALUES (" + this.id + ", (" + this.getUser(this.player_1) + "), (" + this.getUser(this.player_2) + "))";
+      let sql = "INSERT INTO `game` (`room_id`, `user_1_id`, `user_2_id`, `game_active`) VALUES (" + this.id + ", (" + this.getUser(this.player_1) + "), (" + this.getUser(this.player_2) + "), 1)";
 
       con.query(sql, (error, result) => {
         if (error) {throw error;}
-        console.log("player " + this.player_1 + " and " + this.player_2 + " inserted into game ID: " + result.insertId);
+        // console.log("player " + this.player_1 + " and " + this.player_2 + " inserted into game ID: " + result.insertId);
       });
     });
   }

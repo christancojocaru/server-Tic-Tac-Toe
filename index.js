@@ -2,6 +2,7 @@ var express = require('express');
 var socket = require('socket.io');
 const Room = require('./Room.js');
 const User = require('./User.js');
+const DatabaseConnection = require('./DatabaseConnection.js')
 var mysql = require('mysql');
 var players = [];
 var rooms = [];
@@ -9,7 +10,7 @@ var rooms = [];
 //App setup
 var app = express();
 var server = app.listen(4000, function() {
-    console.log("Listening to request on port 4000");
+    // console.log("Listening to request on port 4000");
 });
 
 //Socket setup
@@ -96,6 +97,23 @@ io.on('connection', (socket) => {
       });
     });
 
+    socket.on("update_game", (data) => {
+      console.log("on update_game");
+      rooms.forEach((room) => {
+        if (room.socket_1_id === socket.id || room.socket_2_id === socket.id) {
+          updateGame({
+            room_id: room.room_id,
+            player: data.player,
+            history: data.history,
+            stepNumber: data.stepNumber,
+            IamNext: data.IamNext,
+            socket_1_id: socket.id,
+            socket_2_id: room.socket_1_id === socket.id ? room.socket_2_id : room.socket_1_id,
+          });
+        }
+      });
+    });
+
     socket.on('selectedPlayer', (data) => {
         console.log("on selectedPlayer");
         socket.to(data.room_id).emit("selectedPlayer", {player: data.player});
@@ -123,11 +141,25 @@ io.on('connection', (socket) => {
             if (room.socket_1_id === socket.id || room.socket_2_id === socket.id) {
                 io.in(room.room_id).emit("disconnect");
             }
+            if (room.socket_1_id == socket.id) {
+              outOfGame(room.socket_2_id);
+            } else {
+              outOfGame(room.socket_1_id);
+            }
+            setOutOfGame(room.room_id);
         });
         removePlayer(socket.id);
         emitPlayers();
     });
 });
+
+function outOfGame(socket_id) {
+  players.forEach((player) => {
+    if (player.socket_id === socket_id) {
+        player.in_game = false;
+    }
+  })
+}
 
 function findPlayer(data, by = "name") {
     return players.find((player) => {
@@ -136,7 +168,12 @@ function findPlayer(data, by = "name") {
 }
 
 function updateGame(data) {
-  let who_is_next = !!(Math.round(Math.random()));
+  let who_is_next;
+  if (data.IamNext == undefined) {
+    who_is_next = !!(Math.round(Math.random()));
+  } else {
+    who_is_next = data.IamNext;
+  }
   let data_to_send = {
     [(data.socket_1_id).toString()]: {
       player: data.player,
@@ -151,18 +188,20 @@ function updateGame(data) {
       IamNext: !who_is_next,
     }
   };
-  console.log(data_to_send);
   io.in(data.room_id).emit("update_game", data_to_send);
+  data.history.forEach((data) => {console.log(data);})
+  let data_to_database = {
+    player: data.player,
+    history: JSON.stringify(data.history),
+    room_id: data.room_id
+  };
+  updateGameOnDatabase(data_to_database);
 }
 
 function emitPlayers() {
-    // console.log("Players");
-    // players.forEach((player) => {console.log(player);});
     let active_players = players.filter((player) => {
         return player.active && !player.in_game;
     });
-    // console.log("active Players");
-    // active_players.forEach((player) => {console.log(player);});
     io.sockets.emit('receive_players', active_players);
 }
 
@@ -182,8 +221,52 @@ function removePlayer(socket_id) {
     players.forEach((player) => {
     if (player.socket_id === socket_id) {
         player.active = false;
+        player.in_game = false;
+        setUnactive(player);
     }
     });
+}
+
+function updateGameOnDatabase(data) {
+  let con = new DatabaseConnection().con();
+  con.connect((error) => {
+    if (error) throw err;
+    let sql = "UPDATE `game` SET `player`= ?, `history`= ? WHERE room_id = ?";
+    console.log(sql);
+    let args = [data.player, data.history, data.room_id];
+    con.query(sql, args, (error) => {
+      if (error) {throw error;}
+      console.log("Game Updated Successfully in database.");
+    });
+  });
+}
+
+function setUnactive(player) {
+  let con = new DatabaseConnection().con();
+  con.connect((error) => {
+    if (error) throw err;
+    let sql = "UPDATE `user` SET `active`= ?, `in_game`= ? WHERE name = ?";
+    console.log(sql);
+    let args = [0, 0, player.name];
+    con.query(sql, args, (error) => {
+      if (error) {throw error}
+      console.log("Player " + player.name + " set unactive successfully in database.");
+    });
+  });
+}
+
+function setOutOfGame(room_id) {
+  let con = new DatabaseConnection().con();
+  con.connect((error) => {
+    if (error) throw err;
+    let sql = "UPDATE `game` SET `game_active`= ?, `disconnected`= ? WHERE room_id = ?";
+    console.log(sql);
+    let args = [0, getMyDate(), room_id];
+    con.query(sql, args, (error) => {
+      if (error) {throw error}
+      console.log("Game: " + room_id + " finished in database.");
+    });
+  });
 }
 
 function swapNames(data) {
@@ -191,4 +274,9 @@ function swapNames(data) {
   data.my_name = data.his_name;
   data.his_name = w;
   return data;
+}
+
+function getMyDate() {
+  let date = new Date();
+  return date.getFullYear() + "-" + (date.getMonth() + 1) + "-" + date.getDate() + " " + date.getHours() + ":" + date.getMinutes() + ":" + date.getSeconds();
 }
