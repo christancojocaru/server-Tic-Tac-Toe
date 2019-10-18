@@ -8,7 +8,7 @@ class User {
   }
 
   addToDatabase() {
-    let con = new DatabaseConnection().con();
+    let con = new DatabaseConnection().con;
     con.connect((error) => {
       if (error) throw err;
       let sql = "INSERT INTO user (name, age) VALUES ('" + this.name + "'," + this.age + ")";

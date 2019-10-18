@@ -12,7 +12,7 @@ class Room {
   }
 
   addToDatabase() {
-    let con = new DatabaseConnection().con();
+    let con = new DatabaseConnection().con
     con.connect((error) => {
       if (error) throw err;
       let sql = "INSERT INTO `game` (`room_id`, `user_1_id`, `user_2_id`, `game_active`) VALUES (" + this.id + ", (" + this.getUser(this.player_1) + "), (" + this.getUser(this.player_2) + "), 1)";
